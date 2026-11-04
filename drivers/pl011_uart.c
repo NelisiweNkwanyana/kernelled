@@ -1,0 +1,107 @@
+/*
+ * drivers/pl011_uart.c - driver for the ARM PrimeCell PL011 UART.
+ *
+ * QEMU's virt machine connects PL011 UART0 to the host terminal when QEMU is
+ * started with -nographic, so everything written here appears in Terminal.
+ * Register offsets are from the ARM PL011 Technical Reference Manual (DDI 0183).
+ */
+#include "drivers/uart.h"
+#include "arch/aarch64/mmio.h"
+#include "arch/aarch64/qemu_virt.h"
+
+/* Register offsets */
+#define UART_DR     0x00    /* Data register                       */
+#define UART_FR     0x18    /* Flag register                       */
+#define UART_IBRD   0x24    /* Integer baud-rate divisor           */
+#define UART_FBRD   0x28    /* Fractional baud-rate divisor        */
+#define UART_LCRH   0x2C    /* Line control                        */
+#define UART_CR     0x30    /* Control                             */
+#define UART_IMSC   0x38    /* Interrupt mask set/clear            */
+#define UART_ICR    0x44    /* Interrupt clear                     */
+
+/* Flag register bits */
+#define FR_BUSY     (1u << 3)
+#define FR_TXFF     (1u << 5)   /* transmit FIFO full */
+
+/* Line control bits */
+#define LCRH_FEN    (1u << 4)   /* enable FIFOs           */
+#define LCRH_WLEN_8 (3u << 5)   /* 8 data bits            */
+
+/* Control bits */
+#define CR_UARTEN   (1u << 0)
+#define CR_TXE      (1u << 8)
+#define CR_RXE      (1u << 9)
+
+#define UART_BAUD_RATE 115200u
+
+static inline uintptr_t reg(uint32_t offset)
+{
+    return VIRT_UART0_BASE + offset;
+}
+
+void uart_init(void)
+{
+    /* Disable the UART while it is being configured. */
+    mmio_write32(reg(UART_CR), 0);
+    while (mmio_read32(reg(UART_FR)) & FR_BUSY) {
+    }
+
+    /* Mask and clear all UART interrupts (interrupts arrive in Phase 2). */
+    mmio_write32(reg(UART_IMSC), 0);
+    mmio_write32(reg(UART_ICR), 0x7FF);
+
+    /*
+     * Baud-rate divisor = clock / (16 * baud) = 24 MHz / 1,843,200 = 13.0208.
+     * Integer part 13; fractional part round(0.0208 * 64) = 1.
+     * QEMU does not need this, but real PL011 hardware does.
+     */
+    uint32_t divisor_x64 = (uint32_t)((VIRT_UART0_CLOCK_HZ * 4u) / UART_BAUD_RATE);
+    mmio_write32(reg(UART_IBRD), divisor_x64 >> 6);
+    mmio_write32(reg(UART_FBRD), divisor_x64 & 0x3F);
+
+    /* 8 data bits, no parity, 1 stop bit, FIFOs on. */
+    mmio_write32(reg(UART_LCRH), LCRH_WLEN_8 | LCRH_FEN);
+
+    /* Enable the UART with transmit and receive. */
+    mmio_write32(reg(UART_CR), CR_UARTEN | CR_TXE | CR_RXE);
+}
+
+void uart_putc(char c)
+{
+    if (c == '\n') {
+        uart_putc('\r');            /* terminals expect CR+LF */
+    }
+    while (mmio_read32(reg(UART_FR)) & FR_TXFF) {
+        /* wait for space in the transmit FIFO */
+    }
+    mmio_write32(reg(UART_DR), (uint32_t)(unsigned char)c);
+}
+
+void uart_puts(const char *text)
+{
+    while (*text) {
+        uart_putc(*text++);
+    }
+}
+
+void uart_put_hex(uint64_t value)
+{
+    static const char digits[] = "0123456789abcdef";
+    uart_puts("0x");
+    for (int shift = 60; shift >= 0; shift -= 4) {
+        uart_putc(digits[(value >> shift) & 0xF]);
+    }
+}
+
+void uart_put_dec(uint64_t value)
+{
+    char buffer[21];                /* 2^64 has 20 decimal digits */
+    int length = 0;
+    do {
+        buffer[length++] = (char)('0' + (value % 10));
+        value /= 10;
+    } while (value != 0);
+    while (length > 0) {
+        uart_putc(buffer[--length]);
+    }
+}
