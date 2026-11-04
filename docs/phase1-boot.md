@@ -17,7 +17,7 @@
 |---|---|
 | `0x09000000` | PL011 UART registers |
 | `0x40000000` | Start of RAM (QEMU places the device tree here) |
-| `0x40080000` | KERNELLED `.text` (entry point `_start`) |
+| `0x40080000` | KERNELLED `.text` (entry point `_start`) in Phases 1–2. From Phase 3 the kernel is linked at `0x40200000`, because QEMU only loads the 1 MiB device tree if it fits below the kernel (see `docs/phase3-memory.md`) |
 | after `.text` | `.rodata`, `.data`, `.bss`, 16 KiB boot stack |
 
 ## Boot sequence

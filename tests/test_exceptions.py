@@ -22,9 +22,23 @@ CASES = {
     "data-abort": [
         "KERNEL PANIC: unhandled exception",
         "class     : 0x25 data abort (kernel)",
-        "cause     : synchronous external abort",
+        "cause     : translation fault, level 2",
         "access    : read",
         "address   : 0x000000007f000000",
+        "System halted.",
+    ],
+    "null-pointer": [
+        "KERNEL PANIC: unhandled exception",
+        "class     : 0x25 data abort (kernel)",
+        "cause     : translation fault",
+        "address   : 0x0000000000000000",
+        "System halted.",
+    ],
+    "write-rodata": [
+        "KERNEL PANIC: unhandled exception",
+        "class     : 0x25 data abort (kernel)",
+        "cause     : permission fault, level 3",
+        "access    : write",
         "System halted.",
     ],
     "alignment": [

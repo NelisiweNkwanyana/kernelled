@@ -1,9 +1,11 @@
 /*
  * linker.ld - memory layout of the KERNELLED kernel image.
  *
- * QEMU's "virt" board maps RAM at 0x40000000. QEMU places the device tree
- * blob at the start of RAM, so the kernel is linked 512 KiB higher, at
- * 0x40080000 (the same offset Linux traditionally uses on ARM64).
+ * QEMU's "virt" board maps RAM at 0x40000000. For an ELF kernel, QEMU puts
+ * the device tree blob (1 MiB on virt) at the start of RAM, but only if it
+ * fits below the kernel (hw/arm/boot.c). The kernel is therefore linked
+ * 2 MiB into RAM, at 0x40200000, leaving room for the blob. Phase 1 and 2
+ * used 0x40080000, where the blob silently did not fit.
  */
 
 ENTRY(_start)
@@ -21,7 +23,7 @@ PHDRS
     data   PT_LOAD FLAGS(6);   /* RW-: variables, .bss, stack  */
 }
 
-KERNEL_BASE = 0x40080000;
+KERNEL_BASE = 0x40200000;
 BOOT_STACK_SIZE = 0x4000;   /* 16 KiB boot stack */
 
 SECTIONS
@@ -29,17 +31,23 @@ SECTIONS
     . = KERNEL_BASE;
     __kernel_start = .;
 
+    __text_start = .;
     .text : {
         KEEP(*(.text.boot))     /* boot.S must come first: it holds _start */
         *(.text .text.*)
     } :text
+    __text_end = .;
 
     . = ALIGN(4096);
+    __rodata_start = .;
     .rodata : {
         *(.rodata .rodata.*)
     } :rodata
+    __rodata_end = .;
 
+    /* Everything from here to __kernel_end is read-write, never executable. */
     . = ALIGN(4096);
+    __data_start = .;
     .data : {
         *(.data .data.*)
     } :data

@@ -14,7 +14,9 @@ CNTPCT >= CVAL  --->  distributor (INTID 30)  --->  IRQ exception
                                                     exception_dispatch -> irq_handle()
                                                        gic_acknowledge()   read GICC_IAR -> INTID 30
                                                        timer_handle_irq()  ticks++, CVAL += interval
+                                                       scheduler_tick()    (Phase 5: time slices)
                                                        gic_end_of_interrupt() write GICC_EOIR
+                                                    schedule() if a switch is due (Phase 5)
                                                     restore registers, eret
 ```
 
@@ -46,13 +48,13 @@ Interrupt IDs: 0–15 SGIs (software, between cores), 16–31 PPIs (private per 
 2. `timer_init(100)`: first deadline set, timer enabled, INTID 30 enabled in the GIC.
 3. `cpu_irq_enable()`: clear the I bit in `DAIF`; from now on interrupts are delivered.
 4. `selftest_timer()`: busy-waits exactly 500 ms of counter time and checks that 50 ± 1 ticks arrived.
-5. Idle loop: `wfi` sleeps until the next interrupt, then prints uptime once per second.
+5. Idle loop: `wfi` sleeps until the next interrupt. (In Phase 2b it printed uptime every second; from Phase 4 this loop is the idle process, and uptime is the shell's `uptime` command.)
 
 ## Testing
 
 | Check | Where | Proves |
 |---|---|---|
 | `50 ticks in 500 ms` | kernel self-test | tick rate matches the hardware counter |
-| uptime 1 s → 3 s takes 2.0 ± 0.5 s on the host | `tests/test_boot.py` | the kernel's clock matches real time |
+| `uptime` advances 2.0 ± 0.5 s while the host waits 2 s | `tests/test_shell.py` (was `test_boot.py` in Phase 2b) | the kernel's clock matches real time |
 | IRQs left masked → `0 ticks ... FAIL` | manual negative test | the test catches a broken interrupt path |
 | deliberate faults still panic correctly | `tests/test_exceptions.py` | Phase 2a still works |

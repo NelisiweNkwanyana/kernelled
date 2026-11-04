@@ -6,8 +6,11 @@
  * Register offsets are from the ARM PL011 Technical Reference Manual (DDI 0183).
  */
 #include "drivers/uart.h"
+#include "arch/aarch64/cpu.h"
 #include "arch/aarch64/mmio.h"
 #include "arch/aarch64/qemu_virt.h"
+#include "drivers/gic.h"
+#include "process/process.h"
 
 /* Register offsets */
 #define UART_DR     0x00    /* Data register                       */
@@ -21,7 +24,12 @@
 
 /* Flag register bits */
 #define FR_BUSY     (1u << 3)
+#define FR_RXFE     (1u << 4)   /* receive FIFO empty */
 #define FR_TXFF     (1u << 5)   /* transmit FIFO full */
+
+/* Interrupt bits (IMSC and ICR) */
+#define INT_RX      (1u << 4)   /* receive FIFO reached its trigger level */
+#define INT_RT      (1u << 6)   /* receive timeout: bytes waiting, line idle */
 
 /* Line control bits */
 #define LCRH_FEN    (1u << 4)   /* enable FIFOs           */
@@ -103,5 +111,58 @@ void uart_put_dec(uint64_t value)
     } while (value != 0);
     while (length > 0) {
         uart_putc(buffer[--length]);
+    }
+}
+
+/* ---- Input ---------------------------------------------------------------- */
+
+#define RX_BUFFER_SIZE 256
+
+static char rx_buffer[RX_BUFFER_SIZE];
+static volatile unsigned int rx_head;       /* next slot the interrupt writes */
+static volatile unsigned int rx_tail;       /* next slot uart_getc reads */
+static struct process *volatile rx_waiter;  /* process blocked in uart_getc */
+
+void uart_enable_rx_interrupt(void)
+{
+    /* Both "FIFO filling up" and "timeout" are needed: with FIFOs on, a single
+     * key press never reaches the trigger level, only the timeout fires. */
+    mmio_write32(reg(UART_ICR), INT_RX | INT_RT);
+    mmio_write32(reg(UART_IMSC), INT_RX | INT_RT);
+    gic_enable_interrupt(VIRT_IRQ_UART0, 0xA0);
+}
+
+void uart_handle_irq(void)
+{
+    while (!(mmio_read32(reg(UART_FR)) & FR_RXFE)) {
+        char c = (char)(mmio_read32(reg(UART_DR)) & 0xFF);
+        unsigned int next = (rx_head + 1) % RX_BUFFER_SIZE;
+        if (next != rx_tail) {          /* buffer full: drop the byte */
+            rx_buffer[rx_head] = c;
+            rx_head = next;
+        }
+    }
+    mmio_write32(reg(UART_ICR), INT_RX | INT_RT);
+    if (rx_waiter) {
+        process_wake(rx_waiter);
+    }
+}
+
+char uart_getc(void)
+{
+    for (;;) {
+        /* Check and sleep with IRQs masked: a byte arriving between the
+         * check and process_block() would otherwise never wake us. */
+        uint64_t flags = cpu_irq_save();
+        if (rx_tail != rx_head) {
+            char c = rx_buffer[rx_tail];
+            rx_tail = (rx_tail + 1) % RX_BUFFER_SIZE;
+            cpu_irq_restore(flags);
+            return c;
+        }
+        rx_waiter = process_current();
+        process_block();
+        rx_waiter = 0;
+        cpu_irq_restore(flags);
     }
 }

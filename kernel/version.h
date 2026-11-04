@@ -4,6 +4,6 @@
 #ifndef KERNELLED_KERNEL_VERSION_H
 #define KERNELLED_KERNEL_VERSION_H
 
-#define KERNELLED_VERSION "0.3.0 (Phase 2b: interrupts and timer)"
+#define KERNELLED_VERSION "1.0.0"
 
 #endif /* KERNELLED_KERNEL_VERSION_H */

@@ -9,8 +9,10 @@
 #include "arch/aarch64/qemu_virt.h"
 #include "drivers/gic.h"
 #include "drivers/timer.h"
+#include "drivers/uart.h"
 #include "interrupts/irq.h"
 #include "kernel/printk.h"
+#include "scheduler/scheduler.h"
 
 volatile uint64_t irq_count;
 volatile uint64_t irq_spurious_count;
@@ -30,6 +32,10 @@ void irq_handle(void)
     switch (intid) {
     case VIRT_IRQ_TIMER_EL1_PHYS:
         timer_handle_irq();
+        scheduler_tick();
+        break;
+    case VIRT_IRQ_UART0:
+        uart_handle_irq();
         break;
     default:
         kprintf("[irq] no handler for INTID %u, ignored\n", intid);

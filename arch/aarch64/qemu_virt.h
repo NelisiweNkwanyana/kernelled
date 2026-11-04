@@ -22,4 +22,7 @@
  */
 #define VIRT_IRQ_TIMER_EL1_PHYS  30
 
+/* SPIs (shared peripheral interrupts) are numbered from 32. UART0 is SPI 1. */
+#define VIRT_IRQ_UART0           33
+
 #endif /* KERNELLED_ARCH_QEMU_VIRT_H */

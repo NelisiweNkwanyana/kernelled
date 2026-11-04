@@ -12,6 +12,7 @@
 
 #include "interrupts/exceptions.h"
 #include "interrupts/irq.h"
+#include "scheduler/scheduler.h"
 #include "kernel/printk.h"
 
 /* Exception classes KERNELLED recognises. */
@@ -109,7 +110,13 @@ void kernel_panic(const char *reason, const struct trap_frame *frame, uint64_t s
     kprintf("  class     : 0x%02x %s\n", ec, class_name(ec));
     if (ec == EC_DABORT_SAME || ec == EC_DABORT_LOWER ||
         ec == EC_IABORT_SAME || ec == EC_IABORT_LOWER) {
-        kprintf("  cause     : %s\n", fault_status_name(iss & 0x3F));
+        unsigned int fsc = iss & 0x3F;
+        if (fsc < 0x10) {
+            /* Low 2 bits: page-table level at which the MMU gave up. */
+            kprintf("  cause     : %s, level %u\n", fault_status_name(fsc), fsc & 3);
+        } else {
+            kprintf("  cause     : %s\n", fault_status_name(fsc));
+        }
         if (ec == EC_DABORT_SAME || ec == EC_DABORT_LOWER) {
             kprintf("  access    : %s\n", (iss & (1u << 6)) ? "write" : "read");
         }
@@ -128,6 +135,15 @@ void kernel_panic(const char *reason, const struct trap_frame *frame, uint64_t s
     }
     kprintf("System halted.\n");
 
+    for (;;) {
+        __asm__ volatile("wfe");
+    }
+}
+
+void kernel_halt(const char *reason)
+{
+    __asm__ volatile("msr daifset, #0xf");
+    kprintf("\n*** KERNEL PANIC: %s ***\nSystem halted.\n", reason);
     for (;;) {
         __asm__ volatile("wfe");
     }
@@ -157,6 +173,13 @@ void exception_dispatch(struct trap_frame *frame, uint64_t slot)
     /* Slot 5: IRQ while the kernel was running (current EL, SP_ELx). */
     if (slot == 5) {
         irq_handle();
+        /* The timer may have ended this process's time slice, or an
+         * interrupt may have woken a process: switch now, before returning.
+         * This process's trap frame stays on its own stack until it is
+         * scheduled again, then the eret below resumes it. */
+        if (scheduler_need_resched) {
+            schedule();
+        }
         return;
     }
     if ((slot & 3) == 1) {

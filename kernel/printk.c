@@ -7,6 +7,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 
+#include "arch/aarch64/cpu.h"
 #include "drivers/uart.h"
 #include "kernel/printk.h"
 
@@ -47,6 +48,9 @@ void kprintf(const char *format, ...)
 {
     va_list args;
     va_start(args, format);
+
+    /* One message at a time: a process switch mid-line would mix output. */
+    uint64_t flags = cpu_irq_save();
 
     for (const char *p = format; *p != '\0'; p++) {
         if (*p != '%') {
@@ -132,5 +136,6 @@ void kprintf(const char *format, ...)
         }
     }
 
+    cpu_irq_restore(flags);
     va_end(args);
 }

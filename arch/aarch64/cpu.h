@@ -53,4 +53,22 @@ static inline void cpu_irq_disable(void)
     __asm__ volatile("msr daifset, #2" ::: "memory");
 }
 
+/*
+ * Mask IRQs and return the previous mask state, for short critical sections:
+ *     uint64_t flags = cpu_irq_save(); ... cpu_irq_restore(flags);
+ * On a single core this is enough to stop an interrupt (or a preemptive
+ * process switch) from running in the middle of the protected code.
+ */
+static inline uint64_t cpu_irq_save(void)
+{
+    uint64_t flags;
+    __asm__ volatile("mrs %0, daif\n\tmsr daifset, #2" : "=r"(flags) :: "memory");
+    return flags;
+}
+
+static inline void cpu_irq_restore(uint64_t flags)
+{
+    __asm__ volatile("msr daif, %0" :: "r"(flags) : "memory");
+}
+
 #endif /* KERNELLED_ARCH_CPU_H */

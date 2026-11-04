@@ -18,17 +18,26 @@ EXPECTED_LINES = [
     "[boot] exception level EL1",
     "[init] exception vectors installed at",
     "[test] exception round-trip (SVC + BRK): PASS",
+    "[mem] device tree at 0x0000000040000000",
+    "RAM 0x0000000040000000 - 0x0000000048000000 (128 MiB)",
+    "[init] mmu: on",
+    "[test] page allocator (alloc, zero, free, refuse oversize): PASS",
+    "[test] kernel heap (64 blocks, data intact, fully coalesced): PASS",
+    "[test] mmu enabled: PASS",
     "[init] GICv2 ready",
     "[init] timer: counter",
+    "[init] scheduler: round-robin",
     "ticks in 500 ms (expected 50): PASS",
-    "[boot] Phase 2b complete.",
+    "[init] ramfs:",
+    "[test] round-robin: CPU ticks",
+    "[test] process_sleep(60): away for",
+    "[test] process exit and reaping (stacks returned to page allocator): PASS",
+    "[test] file system: create, write, append, read, paths, listing: PASS",
+    "[test] file system: error cases rejected: PASS",
+    "[test] file system: remove frees nodes and file data: PASS",
+    "[boot] KERNELLED 1.0.0 is up.",
+    "kernelled:/$ ",
 ]
-
-# The two uptime lines must be about 2 seconds apart in real (host) time.
-UPTIME_FIRST = "[timer] uptime 1 s"
-UPTIME_LATER = "[timer] uptime 3 s"
-UPTIME_GAP_SECONDS = 2.0
-UPTIME_TOLERANCE = 0.5
 
 
 def boot_and_capture(qemu, kernel, timeout, until=EXPECTED_LINES, seen_at=None):
@@ -78,32 +87,21 @@ def main():
         print(f"FAIL: {args.kernel} not found. Run 'make' first.")
         return 1
 
-    seen_at = {}
-    output = boot_and_capture(args.qemu, args.kernel, args.timeout,
-                              until=EXPECTED_LINES + [UPTIME_FIRST, UPTIME_LATER], seen_at=seen_at)
+    output = boot_and_capture(args.qemu, args.kernel, args.timeout)
     print("---- serial console ----")
     print(output.rstrip())
     print("------------------------")
 
     missing = [line for line in EXPECTED_LINES if line not in output]
     for line in EXPECTED_LINES:
-        print(("  ok    " if line not in missing else "  MISSING ") + line)
-    if missing:
-        print(f"FAIL: {len(missing)} expected line(s) missing")
+        print(("  ok    " if line not in missing else "  MISSING ") + line.rstrip())
+    failed_tests = [line for line in output.splitlines() if line.startswith("[test]") and "FAIL" in line]
+    for line in failed_tests:
+        print("  FAILED " + line)
+    if missing or failed_tests:
+        print(f"FAIL: {len(missing)} expected line(s) missing, {len(failed_tests)} self-test(s) failed")
         return 1
-
-    if UPTIME_FIRST not in seen_at or UPTIME_LATER not in seen_at:
-        print(f"FAIL: '{UPTIME_FIRST}' and '{UPTIME_LATER}' did not both appear "
-              "(the timer interrupt is not reaching the idle loop)")
-        return 1
-    gap = seen_at[UPTIME_LATER] - seen_at[UPTIME_FIRST]
-    in_range = abs(gap - UPTIME_GAP_SECONDS) <= UPTIME_TOLERANCE
-    print(f"  {'ok   ' if in_range else 'FAIL '} uptime 1 s -> 3 s took {gap:.2f} s of real time "
-          f"(expected {UPTIME_GAP_SECONDS:.1f} +/- {UPTIME_TOLERANCE})")
-    if not in_range:
-        print("FAIL: the kernel's clock does not match real time")
-        return 1
-    print("PASS: KERNELLED booted and printed the expected messages")
+    print("PASS: KERNELLED booted, every self-test passed, the shell is waiting")
     return 0
 
 

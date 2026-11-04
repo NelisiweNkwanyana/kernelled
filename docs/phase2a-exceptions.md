@@ -53,7 +53,9 @@ Each slot saves `x0`/`x1`, loads its slot number and branches to `exception_comm
 | `FAULT=` | What it does | Expected class / cause |
 |---|---|---|
 | `undefined` | Executes `UDF #0` | `0x00` unknown instruction |
-| `data-abort` | Reads `0x7f000000`, where nothing exists | `0x25` data abort, synchronous external abort |
-| `alignment` | 8-byte read from `0x40090001` with the MMU off | `0x25` data abort, alignment fault |
+| `data-abort` | Reads `0x7f000000`, which is not mapped | `0x25` data abort, translation fault level 2 (it was "synchronous external abort" before the MMU existed) |
+| `alignment` | 8-byte `LDR` from `0x40090001` | `0x25` data abort, alignment fault |
+| `null-pointer` | Reads address 0 (added in Phase 3) | `0x25` data abort, translation fault |
+| `write-rodata` | Writes to a string constant (added in Phase 3) | `0x25` data abort, permission fault level 3, write |
 
 - `make test` runs the boot test and then checks all three crash reports automatically.
