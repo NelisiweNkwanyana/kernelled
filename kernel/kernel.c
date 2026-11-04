@@ -7,6 +7,9 @@
 
 #include "arch/aarch64/cpu.h"
 #include "drivers/uart.h"
+#include "interrupts/exceptions.h"
+#include "kernel/printk.h"
+#include "kernel/selftest.h"
 #include "kernel/version.h"
 
 /* Symbols defined by linker.ld. Only their addresses are meaningful. */
@@ -19,29 +22,26 @@ void kernel_main(void)
 {
     uart_init();
 
-    uart_puts("\n");
-    uart_puts("KERNELLED OPERATING SYSTEM\n");
-    uart_puts("Kernel successfully initialised.\n");
-    uart_puts("Welcome to KERNELLED.\n");
-    uart_puts("\n");
+    kprintf("\n");
+    kprintf("KERNELLED OPERATING SYSTEM\n");
+    kprintf("Kernel successfully initialised.\n");
+    kprintf("Welcome to KERNELLED.\n");
+    kprintf("\n");
 
     /* Boot report: every value below is read from the hardware or linker. */
-    uart_puts("[boot] version         " KERNELLED_VERSION "\n");
-    uart_puts("[boot] exception level EL");
-    uart_put_dec(cpu_current_el());
-    uart_puts("\n[boot] boot core       ");
-    uart_put_dec(cpu_core_id());
-    uart_puts("\n[boot] cpu (MIDR_EL1)  ");
-    uart_put_hex(cpu_midr());
-    uart_puts("\n[boot] kernel image    ");
-    uart_put_hex((uint64_t)(uintptr_t)__kernel_start);
-    uart_puts(" - ");
-    uart_put_hex((uint64_t)(uintptr_t)__kernel_end);
-    uart_puts(" (");
-    uart_put_dec((uint64_t)(__kernel_end - __kernel_start));
-    uart_puts(" bytes)\n");
-    uart_puts("[boot] Phase 1 complete. CPU idle. Quit QEMU with Ctrl-A, then X.\n");
+    kprintf("[boot] version         %s\n", KERNELLED_VERSION);
+    kprintf("[boot] exception level EL%u\n", cpu_current_el());
+    kprintf("[boot] boot core       %u\n", cpu_core_id());
+    kprintf("[boot] cpu (MIDR_EL1)  0x%016lx\n", cpu_midr());
+    kprintf("[boot] kernel image    %p - %p (%lu bytes)\n", (void *)__kernel_start,
+            (void *)__kernel_end, (uint64_t)(__kernel_end - __kernel_start));
 
+    /* Phase 2a: exceptions. */
+    exceptions_init();
+    selftest_exceptions();
+    selftest_trigger_fault();       /* only crashes in a FAULT=... build */
+
+    kprintf("[boot] Phase 2a complete. CPU idle. Quit QEMU with Ctrl-A, then X.\n");
     for (;;) {
         cpu_wait_for_event();
     }

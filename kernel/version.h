@@ -4,6 +4,6 @@
 #ifndef KERNELLED_KERNEL_VERSION_H
 #define KERNELLED_KERNEL_VERSION_H
 
-#define KERNELLED_VERSION "0.1.0 (Phase 1: boot)"
+#define KERNELLED_VERSION "0.2.0 (Phase 2a: exceptions)"
 
 #endif /* KERNELLED_KERNEL_VERSION_H */

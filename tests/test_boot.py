@@ -16,11 +16,15 @@ EXPECTED_LINES = [
     "Kernel successfully initialised.",
     "Welcome to KERNELLED.",
     "[boot] exception level EL1",
-    "[boot] Phase 1 complete.",
+    "[init] exception vectors installed at",
+    "[test] exception round-trip (SVC + BRK): PASS",
+    "[boot] Phase 2a complete.",
 ]
 
 
-def boot_and_capture(qemu, kernel, timeout):
+def boot_and_capture(qemu, kernel, timeout, until=EXPECTED_LINES):
+    """Run QEMU, return the console text once every string in `until` has appeared
+    (or the timeout expires)."""
     command = [
         qemu, "-machine", "virt", "-cpu", "cortex-a72", "-smp", "1", "-m", "128M",
         "-nographic", "-kernel", kernel,
@@ -40,7 +44,7 @@ def boot_and_capture(qemu, kernel, timeout):
                     break               # QEMU exited
                 output += chunk
                 text = output.decode(errors="replace")
-                if all(line in text for line in EXPECTED_LINES):
+                if all(line in text for line in until):
                     break
     finally:
         process.kill()

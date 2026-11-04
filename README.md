@@ -7,7 +7,8 @@ KERNELLED is an educational operating system for 64-bit ARM (AArch64), written f
 | Phase | Area | Status |
 |---|---|---|
 | 1 | Foundation: toolchain, boot, serial console | Done |
-| 2 | Kernel initialisation, exceptions, interrupts, timer | Not started |
+| 2a | Exception vectors, crash reports, SVC/BRK handling | Done |
+| 2b | Interrupt controller (GIC) and timer | Not started |
 | 3 | Memory management | Not started |
 | 4 | Process management, context switching | Not started |
 | 5 | Round-robin CPU scheduling | Not started |
@@ -30,7 +31,8 @@ make env                                   # verify everything is installed
 ```sh
 make            # build build/kernelled.elf
 make run        # boot in QEMU; quit with Ctrl-A, then X
-make test       # boot headlessly and check the console output
+make test       # boot test + checks that every deliberate fault is reported
+make run FAULT=data-abort   # watch a deliberate crash (also: undefined, alignment)
 ```
 
 Expected console output:
@@ -40,7 +42,7 @@ KERNELLED OPERATING SYSTEM
 Kernel successfully initialised.
 Welcome to KERNELLED.
 
-[boot] version         0.1.0 (Phase 1: boot)
+[boot] version         0.2.0 (Phase 2a: exceptions)
 [boot] exception level EL1
 [boot] boot core       0
 ...
@@ -57,10 +59,11 @@ make gdb        # terminal 2: GDB attaches and stops at kernel_main
 
 ```
 boot/         first instructions (_start), stack and .bss setup
-kernel/       kernel_main and core kernel code
-arch/aarch64/ CPU helpers, MMIO access, QEMU virt memory map
+kernel/       kernel_main, kprintf, boot self-tests
+arch/aarch64/ CPU helpers, MMIO access, QEMU virt memory map, exception vector table
 drivers/      device drivers (PL011 UART)
-memory/ interrupts/ process/ scheduler/ filesystem/ shell/   later phases
+interrupts/   trap frame, exception decoding, kernel panic report
+memory/ process/ scheduler/ filesystem/ shell/   later phases
 tests/        automated tests (QEMU boot test)
 scripts/      development utilities
 docs/         design notes
@@ -68,4 +71,4 @@ linker.ld     kernel memory layout
 Makefile      build automation
 ```
 
-See `docs/phase1-boot.md` for how the boot process works.
+Design notes: `docs/phase1-boot.md` (boot process), `docs/phase2a-exceptions.md` (exceptions).
