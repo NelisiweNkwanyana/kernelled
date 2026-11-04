@@ -11,6 +11,7 @@
 #include <stdint.h>
 
 #include "interrupts/exceptions.h"
+#include "interrupts/irq.h"
 #include "kernel/printk.h"
 
 /* Exception classes KERNELLED recognises. */
@@ -153,8 +154,13 @@ void exception_dispatch(struct trap_frame *frame, uint64_t slot)
         return;
     }
 
+    /* Slot 5: IRQ while the kernel was running (current EL, SP_ELx). */
+    if (slot == 5) {
+        irq_handle();
+        return;
+    }
     if ((slot & 3) == 1) {
-        kernel_panic("unexpected IRQ (interrupts are set up in Phase 2b)", frame, slot);
+        kernel_panic("IRQ from an unexpected origin", frame, slot);
     }
     kernel_panic("unhandled exception", frame, slot);
 }

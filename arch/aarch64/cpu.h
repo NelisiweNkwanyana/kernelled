@@ -36,4 +36,21 @@ static inline void cpu_wait_for_event(void)
     __asm__ volatile("wfe");
 }
 
+/* Sleep until an interrupt is pending. Used once interrupts are enabled. */
+static inline void cpu_wait_for_interrupt(void)
+{
+    __asm__ volatile("wfi" ::: "memory");
+}
+
+/* Unmask / mask IRQs (the I bit of PSTATE.DAIF). */
+static inline void cpu_irq_enable(void)
+{
+    __asm__ volatile("msr daifclr, #2" ::: "memory");
+}
+
+static inline void cpu_irq_disable(void)
+{
+    __asm__ volatile("msr daifset, #2" ::: "memory");
+}
+
 #endif /* KERNELLED_ARCH_CPU_H */

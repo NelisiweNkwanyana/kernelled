@@ -6,6 +6,8 @@
 #include <stdint.h>
 
 #include "arch/aarch64/cpu.h"
+#include "drivers/gic.h"
+#include "drivers/timer.h"
 #include "drivers/uart.h"
 #include "interrupts/exceptions.h"
 #include "kernel/printk.h"
@@ -15,6 +17,9 @@
 /* Symbols defined by linker.ld. Only their addresses are meaningful. */
 extern char __kernel_start[];
 extern char __kernel_end[];
+
+/* System tick rate: 100 interrupts per second, one every 10 ms. */
+#define TICK_HZ 100
 
 void kernel_main(void);
 
@@ -41,8 +46,28 @@ void kernel_main(void)
     selftest_exceptions();
     selftest_trigger_fault();       /* only crashes in a FAULT=... build */
 
-    kprintf("[boot] Phase 2a complete. CPU idle. Quit QEMU with Ctrl-A, then X.\n");
+    /* Phase 2b: interrupt controller, then a 100 Hz tick, then unmask IRQs. */
+    if (gic_init()) {
+        timer_init(TICK_HZ);
+        cpu_irq_enable();
+    }
+    selftest_timer();
+
+    kprintf("[boot] Phase 2b complete. Printing uptime every second. "
+            "Quit QEMU with Ctrl-A, then X.\n");
+
+    /*
+     * Idle loop. WFI sleeps until an interrupt arrives; the timer IRQ runs,
+     * returns here, and we print once each time a full second has passed.
+     */
+    uint64_t last_second = 0;
     for (;;) {
-        cpu_wait_for_event();
+        cpu_wait_for_interrupt();
+        uint64_t ticks = timer_ticks();
+        uint64_t second = ticks / TICK_HZ;
+        if (second != last_second) {
+            last_second = second;
+            kprintf("[timer] uptime %lu s (%lu ticks)\n", second, ticks);
+        }
     }
 }

@@ -31,6 +31,13 @@ _start:
     /* We are at EL2 (e.g. QEMU with -machine virtualization=on): drop to EL1. */
     mov     x0, #(1 << 31)          /* HCR_EL2.RW = 1: EL1 runs in AArch64   */
     msr     hcr_el2, x0
+    /* Let EL1 use the physical counter and timer (Phase 2b). QEMU already
+     * allows this, but the architecture leaves CNTHCTL_EL2's reset value
+     * unknown, so we set the two bits ourselves. */
+    mrs     x0, cnthctl_el2
+    orr     x0, x0, #0x3            /* EL1PCTEN | EL1PCEN                    */
+    msr     cnthctl_el2, x0
+    msr     cntvoff_el2, xzr        /* virtual counter = physical counter    */
     mov     x0, #0x3c5              /* SPSR: mask D,A,I,F; M[3:0]=0101 EL1h  */
     msr     spsr_el2, x0
     adr     x0, at_el1

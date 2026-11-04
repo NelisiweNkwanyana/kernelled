@@ -3,6 +3,7 @@
  */
 #include <stdint.h>
 
+#include "drivers/timer.h"
 #include "interrupts/exceptions.h"
 #include "kernel/printk.h"
 #include "kernel/selftest.h"
@@ -17,6 +18,35 @@ void selftest_exceptions(void)
 
     int ok = exceptions_svc_count == svc_before + 1 && exceptions_brk_count == brk_before + 1;
     kprintf("[test] exception round-trip (SVC + BRK): %s\n", ok ? "PASS" : "FAIL");
+}
+
+/*
+ * Measure ticks against the hardware counter, not against a guess: busy-wait
+ * until the counter has advanced by exactly half a second, then compare how
+ * many ticks the interrupt handler counted meanwhile. The wait deliberately
+ * does not use WFI, so a broken interrupt path reports "0 ticks: FAIL"
+ * instead of sleeping forever.
+ */
+void selftest_timer(void)
+{
+    if (timer_tick_hz() == 0) {
+        kprintf("[test] timer interrupts: timer not running: FAIL\n");
+        return;
+    }
+    uint64_t frequency = timer_frequency();
+    uint64_t expected = timer_tick_hz() / 2;
+    uint64_t ticks_before = timer_ticks();
+    uint64_t start = timer_counter();
+
+    while (timer_counter() - start < frequency / 2) {
+        /* spin: only the IRQ handler can change timer_ticks() */
+    }
+
+    uint64_t counted = timer_ticks() - ticks_before;
+    /* Allow one tick either side: the window does not start on a tick edge. */
+    int ok = expected > 0 && counted + 1 >= expected && counted <= expected + 1;
+    kprintf("[test] timer interrupts: %lu ticks in 500 ms (expected %lu): %s\n",
+            counted, expected, ok ? "PASS" : "FAIL");
 }
 
 /*

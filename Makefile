@@ -58,7 +58,10 @@ SOURCES_C := kernel/kernel.c \
              kernel/printk.c \
              kernel/selftest.c \
              interrupts/exceptions.c \
-             drivers/pl011_uart.c
+             interrupts/irq.c \
+             drivers/pl011_uart.c \
+             drivers/gic.c \
+             drivers/timer.c
 
 OBJECTS := $(SOURCES_S:%.S=$(BUILD)/%.o) $(SOURCES_C:%.c=$(BUILD)/%.o)
 
